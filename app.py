@@ -122,7 +122,7 @@ exit_date = st.sidebar.date_input("結束日期", value=pd.to_datetime('2026-04-
 st.sidebar.header("選擇股票 (最多6檔)")
 st.sidebar.markdown("*(台股直接輸入代號即可)*")
 
-default_tickers = ["0050", "2330", "00631L", "009816", "00981A", ""]
+default_tickers = ["0050", "009816", "2330", "00631L", "00981A", ""]
 selected_tickers = []
 
 for i in range(6):
