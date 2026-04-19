@@ -4,6 +4,7 @@ import pandas as pd
 import math
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
+import os
 
 # ==========================================
 # 1. 中文字型處理 (加入嚴格的檔案檢查防呆機制)
