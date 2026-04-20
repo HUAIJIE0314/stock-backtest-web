@@ -115,7 +115,7 @@ st.title("📈 歷史回測分析機器人")
 # --- 側邊欄：參數設定 ---
 st.sidebar.header("回測參數設定")
 capital = st.sidebar.number_input("單一標的投入本金", value=500000, step=10000)
-entry_date = st.sidebar.date_input("開始日期", value=pd.to_datetime('2025-01-01'))
+entry_date = st.sidebar.date_input("開始日期", value=pd.to_datetime('2026-01-01'))
 exit_date = st.sidebar.date_input("結束日期", value=pd.to_datetime('2026-04-19'))
 
 # --- 側邊欄：獨立 8 個輸入框 ---
