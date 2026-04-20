@@ -115,17 +115,17 @@ st.title("📈 歷史回測分析機器人")
 # --- 側邊欄：參數設定 ---
 st.sidebar.header("回測參數設定")
 capital = st.sidebar.number_input("單一標的投入本金", value=500000, step=10000)
-entry_date = st.sidebar.date_input("開始日期", value=pd.to_datetime('2025-06-01'))
-exit_date = st.sidebar.date_input("結束日期", value=pd.to_datetime('2026-04-01'))
+entry_date = st.sidebar.date_input("開始日期", value=pd.to_datetime('2025-01-01'))
+exit_date = st.sidebar.date_input("結束日期", value=pd.to_datetime('2026-04-19'))
 
-# --- 側邊欄：獨立 6 個輸入框 ---
-st.sidebar.header("選擇股票 (最多6檔)")
+# --- 側邊欄：獨立 8 個輸入框 ---
+st.sidebar.header("選擇股票 (最多8檔)")
 st.sidebar.markdown("*(台股直接輸入代號即可)*")
 
-default_tickers = ["0050", "2330", "00631L", "00981A", "", ""]
+default_tickers = ["009816", "00631L", "00991A", "00982A", "00992A", "00981A", "0050", "2330"]
 selected_tickers = []
 
-for i in range(6):
+for i in range(8):
     val = st.sidebar.text_input(f"標的 {i+1}", value=default_tickers[i])
     val = val.strip().upper() # 移除空白並轉大寫
     
@@ -174,13 +174,21 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 )
                 
                 # --- 區塊 3：總結長條圖 ---
-                st.subheader("📊 各標的最終報酬率比較")
+                # 【新增修改 1】：將 DataFrame 依照 '報酬率%' 進行排序 
+                # ascending=True 代表由低到高排序 (若想由高到低，請改為 False)
+                df_sorted = df.sort_values(by='報酬率%', ascending=True)
+                
+                # 【新增修改 2】：將回測的起始與結束時間加入標題字串中
+                st.subheader(f"📊 各標的最終報酬率比較 ({start_str} ~ {end_str})")
+                
                 fig, ax = plt.subplots(figsize=(10, 5))
                 
-                colors = ['#ef4444' if val < 0 else '#22c55e' for val in df['報酬率%']]
-                x_labels = df['股票代號'].tolist()
+                # 注意：這裡的顏色判定與 X 軸標籤，都要改從「排序後」的 df_sorted 取值
+                colors = ['#ef4444' if val < 0 else '#22c55e' for val in df_sorted['報酬率%']]
+                x_labels = df_sorted['股票代號'].tolist()
                 
-                bars = ax.bar(x_labels, df['報酬率%'], color=colors, edgecolor='black', alpha=0.7)
+                # 繪製長條圖 (同樣改用 df_sorted['報酬率%'])
+                bars = ax.bar(x_labels, df_sorted['報酬率%'], color=colors, edgecolor='black', alpha=0.7)
                 
                 for bar in bars:
                     height = bar.get_height()
