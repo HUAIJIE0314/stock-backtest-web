@@ -59,7 +59,7 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
             
             # --- 股票分割校正邏輯 ---
             split_events = {
-                '00631L.TW': {'date': '2026-03-31', 'ratio': 22},
+                # '00631L.TW': {'date': '2026-03-31', 'ratio': 22},
                 '0052.TW':   {'date': '2025-11-26', 'ratio': 7}
             }
             if ticker in split_events:
