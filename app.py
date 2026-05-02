@@ -37,7 +37,26 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
         if not ticker: continue
         try:
             data = yf.download(ticker, start=start_date, end=end_date, progress=False)
-            if data.empty: continue
+
+            # 若第一次撈取為空，嘗試以 .TW <-> .TWO 互換做備援再撈一次
+            if data.empty:
+                alt = None
+                t_up = ticker.upper()
+                if t_up.endswith('.TW'):
+                    alt = ticker[:-3] + '.TWO'
+                elif t_up.endswith('.TWO'):
+                    alt = ticker[:-4] + '.TW'
+                elif '.' not in ticker:
+                    # 若沒有任何後綴，先嘗試 .TW，再嘗試 .TWO
+                    alt = ticker + '.TWO'
+
+                if alt:
+                    data = yf.download(alt, start=start_date, end=end_date, progress=False)
+                    if not data.empty:
+                        ticker = alt
+                    else:
+                        # 若替代代號仍無資料，略過該標的
+                        continue
 
             if isinstance(data.columns, pd.MultiIndex):
                 data.columns = data.columns.get_level_values(0)
@@ -62,9 +81,20 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
                 # '00631L.TW': {'date': '2026-03-31', 'ratio': 22},
                 '0052.TW':   {'date': '2025-11-26', 'ratio': 7}
             }
-            if ticker in split_events:
-                split_date_str = split_events[ticker]['date']
-                split_ratio = split_events[ticker]['ratio']
+            # 支援以不同後綴查詢分割事件（若使用者後綴為 .TWO，但 split_events 以 .TW 記錄）
+            lookup_key = ticker
+            split_info = split_events.get(lookup_key)
+            if split_info is None:
+                if lookup_key.upper().endswith('.TWO'):
+                    alt_key = lookup_key[:-4] + '.TW'
+                    split_info = split_events.get(alt_key)
+                elif lookup_key.upper().endswith('.TW'):
+                    alt_key = lookup_key[:-3] + '.TWO'
+                    split_info = split_events.get(alt_key)
+
+            if split_info:
+                split_date_str = split_info['date']
+                split_ratio = split_info['ratio']
                 if actual_start <= split_date_str <= actual_end:
                     shares_bought = shares_bought * split_ratio
                     # 為了讓走勢圖平滑，分割日(含)之後的價格乘上比例，還原真實走勢
