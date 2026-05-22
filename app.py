@@ -251,13 +251,13 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 if latest_start_date > start_str:
                     st.warning(
                         f"⚠️ **注意：資料時間未完全對齊！**\n\n"
-                        f"您設定的開始日期為 `{start_str}`，但測試標的中含有全新上市或近期掛牌的商品。\n\n"
+                        f"您設定的開始日期為 **{start_str}**，但測試標的中含有全新上市或近期掛牌的商品。\n\n"
                         f"目前所有標的中，**最晚的資料起點（上市/有數據日）為：{latest_start_date}**。部分商品的早期累積報酬率可能因此無法呈現或比較。"
                     )
                 else:
                     st.info(f"💡 目前所有測試標的之資料皆成功自設定起點 `{start_str}` 開始對齊計算。")
                 # ==========================================
-                
+
                 # --- 區塊 1：動態折線圖 (歷史走勢) ---
                 st.subheader("📈 歷史累積報酬率走勢 (%)")
                 st.line_chart(daily_returns_df)
