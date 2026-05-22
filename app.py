@@ -286,33 +286,45 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 )
                 
                 # --- 區塊 3：總結長條圖 ---
-                # 【新增修改 1】：將 DataFrame 依照 '報酬率%' 進行排序 
-                # ascending=True 代表由低到高排序 (若想由高到低，請改為 False)
+                # 將 DataFrame 依照 '報酬率%' 進行排序 
                 df_sorted = df.sort_values(by='報酬率%', ascending=True)
                 
-                # 【新增修改 2】：將回測的起始與結束時間加入標題字串中
+                # 將回測的起始與結束時間加入標題字串中
                 st.subheader(f"📊 各標的最終報酬率比較 ({start_str} ~ {end_str})")
                 
                 fig, ax = plt.subplots(figsize=(10, 5))
                 
-                # 注意：這裡的顏色判定與 X 軸標籤，都要改從「排序後」的 df_sorted 取值
-                # colors = ['#ef4444' if val < 0 else '#22c55e' for val in df_sorted['報酬率%']]
-
-                # 虧損 (< 0) 顯示綠色，獲利 (>= 0) 顯示紅色
-                colors = ['#22c55e' if val < 0 else '#ef4444' for val in df_sorted['報酬率%']]
+                # 【修改重點】：顏色判定邏輯 (未對齊:黃色 -> 虧損:綠色 -> 獲利:紅色)
+                colors = []
+                for index, row in df_sorted.iterrows():
+                    # 判斷該標的的實際買入日，是否晚於使用者設定的開始日
+                    if row['實際買入日'] > start_str:
+                        colors.append('#eab308')  # 黃色 (資料未完全對齊)
+                    elif row['報酬率%'] < 0:
+                        colors.append('#22c55e')  # 綠色 (虧損)
+                    else:
+                        colors.append('#ef4444')  # 紅色 (獲利)
 
                 x_labels = df_sorted['股票代號'].tolist()
                 
-                # 繪製長條圖 (同樣改用 df_sorted['報酬率%'])
+                # 繪製長條圖
                 bars = ax.bar(x_labels, df_sorted['報酬率%'], color=colors, edgecolor='black', alpha=0.7)
                 
-                # 【新增這兩行】：設定 X 軸刻度並將標籤旋轉 45 度，對齊右側
+                # 設定 X 軸刻度並將標籤旋轉 45 度，對齊右側
                 ax.set_xticks(range(len(x_labels)))
                 ax.set_xticklabels(x_labels, rotation=45, ha='right', fontproperties=font_prop)
 
-                for bar in bars:
+                # 垂直柱狀圖的數值標註邏輯
+                for bar, (_, row) in zip(bars, df_sorted.iterrows()):
                     height = bar.get_height()
-                    ax.text(bar.get_x() + bar.get_width()/2., height, f'{height:.1f}%', 
+                    
+                    # 數值文字：如果未對齊，在數字旁邊加個星號 * 雙重提示
+                    label_text = f'{height:.1f}%'
+                    if row['實際買入日'] > start_str:
+                        label_text += ' *'
+                    
+                    # 將文字放在柱子上方(獲利)或下方(虧損)
+                    ax.text(bar.get_x() + bar.get_width()/2., height, label_text, 
                             ha='center', va='bottom' if height > 0 else 'top', fontweight='bold',
                             fontproperties=font_prop if font_prop else None)
 
@@ -320,6 +332,9 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 ax.grid(axis='y', linestyle='--', alpha=0.5)
                 
                 st.pyplot(fig)
+                
+                # 【新增說明】：在圖表下方補上圖例說明
+                st.caption("圖例說明：🟥 獲利 | 🟩 虧損 | 🟨 資料未完整對齊 (* 號標示)")
 
             else:
                 st.error("無法取得資料，請確認日期區間是否為交易日，或標的代號是否正確。")
