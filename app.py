@@ -202,7 +202,8 @@ default_tickers = [
 "009816", "00631L", "0050", "2330", 
 "00991A", "00982A", "00992A", "00981A", 
 "00988A", "00947", "00990A", "00987A",
-"00708L"
+"00708L",
+"02001L"
 ]
 
 len_of_default_tickers = len(default_tickers)
@@ -279,6 +280,10 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 
                 # 繪製長條圖 (同樣改用 df_sorted['報酬率%'])
                 bars = ax.bar(x_labels, df_sorted['報酬率%'], color=colors, edgecolor='black', alpha=0.7)
+                
+                # 【新增這兩行】：設定 X 軸刻度並將標籤旋轉 45 度，對齊右側
+                ax.set_xticks(range(len(x_labels)))
+                ax.set_xticklabels(x_labels, rotation=45, ha='right', fontproperties=font_prop)
                 
                 for bar in bars:
                     height = bar.get_height()
