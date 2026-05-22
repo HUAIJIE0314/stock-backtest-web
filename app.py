@@ -40,28 +40,53 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
             data = yf.download(ticker, start=start_date, end=end_date, progress=False)
 
             # 若第一次撈取為空，嘗試以 .TW <-> .TWO 互換做備援再撈一次
+            # if data.empty:
+            #     alt = None
+            #     t_up = ticker.upper()
+            #     if t_up.endswith('.TW'):
+            #         alt = ticker[:-3] + '.TWO'
+            #     elif t_up.endswith('.TWO'):
+            #         alt = ticker[:-4] + '.TW'
+            #     elif '.' not in ticker:
+            #         # 若沒有任何後綴，先嘗試 .TW，再嘗試 .TWO
+            #         alt = ticker + '.TWO'
+
+            #     if alt:
+            #         data = yf.download(alt, start=start_date, end=end_date, progress=False)
+            #         if not data.empty:
+            #             ticker = alt
+            #         else:
+            #             # 若替代代號仍無資料，略過該標的
+            #             continue
+
+            # if isinstance(data.columns, pd.MultiIndex):
+            #     data.columns = data.columns.get_level_values(0)
+
+            # 修正：更安全的字尾互換邏輯，不依賴固定字串長度
             if data.empty:
                 alt = None
                 t_up = ticker.upper()
                 if t_up.endswith('.TW'):
-                    alt = ticker[:-3] + '.TWO'
+                    alt = ticker.replace('.TW', '.TWO') or ticker.replace('.tw', '.two')
                 elif t_up.endswith('.TWO'):
-                    alt = ticker[:-4] + '.TW'
+                    alt = ticker.replace('.TWO', '.TW') or ticker.replace('.two', '.tw')
                 elif '.' not in ticker:
-                    # 若沒有任何後綴，先嘗試 .TW，再嘗試 .TWO
-                    alt = ticker + '.TWO'
+                    alt = ticker + '.TW'
 
                 if alt:
                     data = yf.download(alt, start=start_date, end=end_date, progress=False)
                     if not data.empty:
                         ticker = alt
                     else:
-                        # 若替代代號仍無資料，略過該標的
                         continue
 
+            # 增強防呆：更全面地拍平 Yahoo Finance 傳回的 MultiIndex 欄位
             if isinstance(data.columns, pd.MultiIndex):
-                data.columns = data.columns.get_level_values(0)
-
+                data.columns = [col[0] if isinstance(col, tuple) else col for col in data.columns]
+            
+            # 清理欄位名稱，移除空白並確保乾淨
+            data.columns = [str(col).strip() for col in data.columns]
+            
             price_col = 'Adj Close' if 'Adj Close' in data.columns else 'Close'
             
             initial_price = float(data[price_col].iloc[0])
