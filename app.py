@@ -250,20 +250,21 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 st.success("✅ 回測計算完成！")
                 
                 # ==========================================
-                # 【新增功能】偵測最晚上市日與資料對齊提示
+                # 【修正功能】找出基準日，準確偵測未對齊標的
                 # ==========================================
-                # 將所有標的的實際買入日轉為日期格式並找出最大值（最晚那一天）
-                latest_start_date = pd.to_datetime(df['實際買入日']).max().strftime('%Y-%m-%d')
+                # 以所有標的中「最早的實際買入日」作為對齊基準
+                baseline_date = df['實際買入日'].min()
+                latest_start_date = df['實際買入日'].max()
                 
-                # 如果最晚的資料起點大於使用者設定的開始日期，代表有標的時間落後、未對齊
-                if latest_start_date > start_str:
+                # 如果最晚的起點大於基準日，代表有標的時間落後
+                if latest_start_date > baseline_date:
                     st.warning(
                         f"⚠️ **注意：資料時間未完全對齊！**\n\n"
-                        f"您設定的開始日期為 **{start_str}**，但測試標的中含有全新上市或近期掛牌的商品。\n\n"
-                        f"目前所有標的中，**最晚的資料起點（上市/有數據日）為：{latest_start_date}**。部分商品的早期累積報酬率可能因此無法呈現或比較。"
+                        f"本次回測的對齊基準日為 `{baseline_date}`，但測試標的中含有全新上市或近期掛牌的商品。\n\n"
+                        f"目前所有標的中，**最晚的資料起點為：{latest_start_date}**。部分商品的累積報酬率比較可能會有基準落差。"
                     )
                 else:
-                    st.info(f"💡 目前所有測試標的之資料皆成功自設定起點 `{start_str}` 開始對齊計算。")
+                    st.info(f"💡 目前所有測試標的之資料皆成功自基準日 `{baseline_date}` 開始對齊計算。")
                 # ==========================================
 
                 # --- 區塊 1：動態折線圖 (歷史走勢) ---
@@ -286,20 +287,17 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 )
                 
                 # --- 區塊 3：總結長條圖 ---
-                # 將 DataFrame 依照 '報酬率%' 進行排序 
                 df_sorted = df.sort_values(by='報酬率%', ascending=True)
                 
-                # 將回測的起始與結束時間加入標題字串中
                 st.subheader(f"📊 各標的最終報酬率比較 ({start_str} ~ {end_str})")
                 
                 fig, ax = plt.subplots(figsize=(10, 5))
                 
-                # 【修改重點】：顏色判定邏輯 (未對齊:黃色 -> 虧損:綠色 -> 獲利:紅色)
+                # 【修改重點】：改用 baseline_date 作為比對基準
                 colors = []
                 for index, row in df_sorted.iterrows():
-                    # 判斷該標的的實際買入日，是否晚於使用者設定的開始日
-                    if row['實際買入日'] > start_str:
-                        colors.append('#eab308')  # 黃色 (資料未完全對齊)
+                    if row['實際買入日'] > baseline_date:
+                        colors.append('#eab308')  # 黃色 (晚於基準日，未對齊)
                     elif row['報酬率%'] < 0:
                         colors.append('#22c55e')  # 綠色 (虧損)
                     else:
@@ -307,23 +305,18 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
 
                 x_labels = df_sorted['股票代號'].tolist()
                 
-                # 繪製長條圖
                 bars = ax.bar(x_labels, df_sorted['報酬率%'], color=colors, edgecolor='black', alpha=0.7)
                 
-                # 設定 X 軸刻度並將標籤旋轉 45 度，對齊右側
                 ax.set_xticks(range(len(x_labels)))
                 ax.set_xticklabels(x_labels, rotation=45, ha='right', fontproperties=font_prop)
 
-                # 垂直柱狀圖的數值標註邏輯
                 for bar, (_, row) in zip(bars, df_sorted.iterrows()):
                     height = bar.get_height()
                     
-                    # 數值文字：如果未對齊，在數字旁邊加個星號 * 雙重提示
                     label_text = f'{height:.1f}%'
-                    if row['實際買入日'] > start_str:
+                    if row['實際買入日'] > baseline_date:
                         label_text += ' *'
                     
-                    # 將文字放在柱子上方(獲利)或下方(虧損)
                     ax.text(bar.get_x() + bar.get_width()/2., height, label_text, 
                             ha='center', va='bottom' if height > 0 else 'top', fontweight='bold',
                             fontproperties=font_prop if font_prop else None)
@@ -333,7 +326,6 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 
                 st.pyplot(fig)
                 
-                # 【新增說明】：在圖表下方補上圖例說明
                 st.caption("圖例說明：🟥 獲利 | 🟩 虧損 | 🟨 資料未完整對齊 (* 號標示)")
 
             else:
