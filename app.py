@@ -315,7 +315,7 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                     
                     label_text = f'{height:.1f}%'
                     if row['實際買入日'] > baseline_date:
-                        label_text += ' *'
+                        label_text += '*'
                     
                     ax.text(bar.get_x() + bar.get_width()/2., height, label_text, 
                             ha='center', va='bottom' if height > 0 else 'top', fontweight='bold',
