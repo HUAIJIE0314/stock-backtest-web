@@ -278,22 +278,61 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
 
                 x_labels = df_sorted['股票代號'].tolist()
                 
-                # 繪製長條圖 (同樣改用 df_sorted['報酬率%'])
-                bars = ax.bar(x_labels, df_sorted['報酬率%'], color=colors, edgecolor='black', alpha=0.7)
+                # # 繪製長條圖 (同樣改用 df_sorted['報酬率%'])
+                # bars = ax.bar(x_labels, df_sorted['報酬率%'], color=colors, edgecolor='black', alpha=0.7)
                 
-                # 【新增這兩行】：設定 X 軸刻度並將標籤旋轉 45 度，對齊右側
-                ax.set_xticks(range(len(x_labels)))
-                ax.set_xticklabels(x_labels, rotation=45, ha='right', fontproperties=font_prop)
+                # # 【新增這兩行】：設定 X 軸刻度並將標籤旋轉 45 度，對齊右側
+                # ax.set_xticks(range(len(x_labels)))
+                # ax.set_xticklabels(x_labels, rotation=45, ha='right', fontproperties=font_prop)
+
+                # for bar in bars:
+                #     height = bar.get_height()
+                #     ax.text(bar.get_x() + bar.get_width()/2., height, f'{height:.1f}%', 
+                #             ha='center', va='bottom' if height > 0 else 'top', fontweight='bold',
+                #             fontproperties=font_prop if font_prop else None)
+
+                # ax.axhline(0, color='black', linewidth=0.8)
+                # ax.grid(axis='y', linestyle='--', alpha=0.5)
                 
+                # st.pyplot(fig)
+
+
+                # --- 區塊 3：總結長條圖 (改為水平顯示) ---
+                df_sorted = df.sort_values(by='報酬率%', ascending=True)
+                st.subheader(f"📊 各標的最終報酬率比較 ({start_str} ~ {end_str})")
+                
+                # 稍微調整圖表比例，讓高度隨著標的數量彈性增加
+                fig, ax = plt.subplots(figsize=(10, max(5, len(df_sorted) * 0.5)))
+                
+                colors = ['#22c55e' if val < 0 else '#ef4444' for val in df_sorted['報酬率%']]
+                y_labels = df_sorted['股票代號'].tolist()
+                
+                # 改用 barh 繪製水平長條圖
+                bars = ax.barh(y_labels, df_sorted['報酬率%'], color=colors, edgecolor='black', alpha=0.7)
+                
+                # 水平長條圖的數值標註邏輯
                 for bar in bars:
-                    height = bar.get_height()
-                    ax.text(bar.get_x() + bar.get_width()/2., height, f'{height:.1f}%', 
-                            ha='center', va='bottom' if height > 0 else 'top', fontweight='bold',
+                    width = bar.get_width() # 水平圖的數值變成 width
+                    # 判斷文字要放在柱狀圖的右邊還是左邊 (視正負報酬而定)
+                    ha_align = 'left' if width >= 0 else 'right'
+                    # 稍微偏移一點點，避免文字貼死在邊框上
+                    offset = 1 if width >= 0 else -1
+                    
+                    ax.text(width + offset, bar.get_y() + bar.get_height()/2., f'{width:.1f}%', 
+                            ha=ha_align, va='center', fontweight='bold',
                             fontproperties=font_prop if font_prop else None)
 
-                ax.axhline(0, color='black', linewidth=0.8)
-                ax.grid(axis='y', linestyle='--', alpha=0.5)
+                # 畫一條垂直於 0 的基準線
+                ax.axvline(0, color='black', linewidth=0.8)
+                ax.grid(axis='x', linestyle='--', alpha=0.5) # 改為顯示 X 軸網格
+                
+                # 套用中文字型到 Y 軸標籤 (確保代號或名稱不亂碼)
+                if font_prop:
+                    for label in ax.get_yticklabels():
+                        label.set_fontproperties(font_prop)
                 
                 st.pyplot(fig)
+
+
             else:
                 st.error("無法取得資料，請確認日期區間是否為交易日，或標的代號是否正確。")
