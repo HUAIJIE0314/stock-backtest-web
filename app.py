@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import os
 from datetime import datetime, timedelta
+import requests
 
 # ==========================================
 # 1. 中文字型處理 (加入嚴格的檔案檢查防呆機制)
@@ -24,8 +25,34 @@ if font_prop:
     plt.rcParams['font.sans-serif'] = [font_prop.get_name()]
     plt.rcParams['axes.unicode_minus'] = False
 
+
+@st.cache_data(show_spinner=False)
+def get_taiwan_etn_finmind(ticker, start_date, end_date):
+    url = "https://api.finmindtrade.com/api/v4/data"
+    # FinMind 只吃純代號，需濾除 Yahoo Finance 的字尾 (.TW / .TWO)
+    clean_ticker = ticker.upper().replace('.TW', '').replace('.TWO', '')
+    parameter = {
+        "dataset": "TaiwanStockPrice",
+        "data_id": clean_ticker,
+        "start_date": start_date,
+        "end_date": end_date,
+    }
+    try:
+        r = requests.get(url, params=parameter, timeout=10)
+        data = r.json()
+        if data.get('msg') == 'success' and len(data.get('data', [])) > 0:
+            df = pd.DataFrame(data['data'])
+            # 將 FinMind 的小寫欄位轉為首字母大寫，接軌 yfinance 格式
+            df = df.rename(columns={'date': 'Date', 'close': 'Close'})
+            df.set_index(pd.to_datetime(df['Date']), inplace=True)
+            return df
+    except Exception as e:
+        pass # 靜默處理，若發生錯誤會回傳空表，交由主程式略過
+        
+    return pd.DataFrame()
+
 # ==========================================
-# 2. 核心回測邏輯 (新增每日報酬率計算)
+# 2. 核心回測邏輯 (新增每日報酬率計算)(雙資料源備援：yfinance + FinMind)
 # ==========================================
 @st.cache_data(show_spinner=False)
 def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stock):
@@ -37,32 +64,10 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
     for ticker in tickers:
         if not ticker: continue
         try:
+            # 階段 1：嘗試從 yfinance 撈取資料
             data = yf.download(ticker, start=start_date, end=end_date, progress=False)
 
-            # 若第一次撈取為空，嘗試以 .TW <-> .TWO 互換做備援再撈一次
-            # if data.empty:
-            #     alt = None
-            #     t_up = ticker.upper()
-            #     if t_up.endswith('.TW'):
-            #         alt = ticker[:-3] + '.TWO'
-            #     elif t_up.endswith('.TWO'):
-            #         alt = ticker[:-4] + '.TW'
-            #     elif '.' not in ticker:
-            #         # 若沒有任何後綴，先嘗試 .TW，再嘗試 .TWO
-            #         alt = ticker + '.TWO'
-
-            #     if alt:
-            #         data = yf.download(alt, start=start_date, end=end_date, progress=False)
-            #         if not data.empty:
-            #             ticker = alt
-            #         else:
-            #             # 若替代代號仍無資料，略過該標的
-            #             continue
-
-            # if isinstance(data.columns, pd.MultiIndex):
-            #     data.columns = data.columns.get_level_values(0)
-
-            # 修正：更安全的字尾互換邏輯，不依賴固定字串長度
+            # yfinance 備援：若為空，嘗試台股字尾互換
             if data.empty:
                 alt = None
                 t_up = ticker.upper()
@@ -77,17 +82,27 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
                     data = yf.download(alt, start=start_date, end=end_date, progress=False)
                     if not data.empty:
                         ticker = alt
-                    else:
-                        continue
 
-            # 增強防呆：更全面地拍平 Yahoo Finance 傳回的 MultiIndex 欄位
+            # 階段 2：若 yfinance 徹底失效 (例如 02001L 等 ETN)，啟動 FinMind 救援
+            if data.empty:
+                data = get_taiwan_etn_finmind(ticker, start_date, end_date)
+                if data.empty:
+                    # 如果雙資料源都找不到，放棄該標的
+                    continue
+
+            # --- 欄位清理與正規化 ---
+            # 拍平 yfinance 特有的 MultiIndex
             if isinstance(data.columns, pd.MultiIndex):
                 data.columns = [col[0] if isinstance(col, tuple) else col for col in data.columns]
-            
-            # 清理欄位名稱，移除空白並確保乾淨
             data.columns = [str(col).strip() for col in data.columns]
-            
+
             price_col = 'Adj Close' if 'Adj Close' in data.columns else 'Close'
+            
+            # 確保有抓到價格欄位
+            if price_col not in data.columns:
+                continue
+
+            # --- 後續計算邏輯保持不變 ---
             
             initial_price = float(data[price_col].iloc[0])
             current_price = float(data[price_col].iloc[-1])
@@ -241,7 +256,11 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 fig, ax = plt.subplots(figsize=(10, 5))
                 
                 # 注意：這裡的顏色判定與 X 軸標籤，都要改從「排序後」的 df_sorted 取值
-                colors = ['#ef4444' if val < 0 else '#22c55e' for val in df_sorted['報酬率%']]
+                # colors = ['#ef4444' if val < 0 else '#22c55e' for val in df_sorted['報酬率%']]
+
+                # 虧損 (< 0) 顯示綠色，獲利 (>= 0) 顯示紅色
+                colors = ['#22c55e' if val < 0 else '#ef4444' for val in df_sorted['報酬率%']]
+
                 x_labels = df_sorted['股票代號'].tolist()
                 
                 # 繪製長條圖 (同樣改用 df_sorted['報酬率%'])
