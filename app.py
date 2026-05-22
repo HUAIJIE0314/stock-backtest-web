@@ -190,14 +190,27 @@ entry_date = st.sidebar.date_input("開始日期", value=pd.to_datetime('2026-01
 # exit_date = st.sidebar.date_input("結束日期", value=pd.to_datetime('2026-04-19'))
 exit_date = st.sidebar.date_input("結束日期", value=datetime.today() - timedelta(days=1))
 
-# --- 側邊欄：獨立 8 個輸入框 ---
+# --- 側邊欄：獨立 20 個輸入框 ---
 st.sidebar.header("選擇股票 (最多8檔)")
 st.sidebar.markdown("*(台股直接輸入代號即可)*")
 
-default_tickers = ["009816", "00631L", "00991A", "00982A", "00992A", "00981A", "0050", "2330"]
+# default_tickers = ["009816", "00631L", "00991A", "00982A", "00992A", "00981A", "0050", "2330"]
+Max_of_tickers = 20
+
+default_tickers = [
+"009816", "00631L", "0050", "2330", 
+"00991A", "00982A", "00992A", "00981A", 
+"00988A", "00947", "00990A", "00987A",
+"00708L"
+]
+
+len_of_default_tickers = len(default_tickers)
+for i in range(Max_of_tickers-len_of_default_tickers):
+    default_tickers.append("")
+
 selected_tickers = []
 
-for i in range(8):
+for i in range(Max_of_tickers):
     val = st.sidebar.text_input(f"標的 {i+1}", value=default_tickers[i])
     val = val.strip().upper() # 移除空白並轉大寫
     
