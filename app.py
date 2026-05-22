@@ -260,7 +260,7 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                 if latest_start_date > baseline_date:
                     st.warning(
                         f"⚠️ **注意：資料時間未完全對齊！**\n\n"
-                        f"本次回測的對齊基準日為 `{baseline_date}`，但測試標的中含有全新上市或近期掛牌的商品。\n\n"
+                        f"本次回測的對齊基準日為 **{baseline_date}**，但測試標的中含有全新上市或近期掛牌的商品。\n\n"
                         f"目前所有標的中，**最晚的資料起點為：{latest_start_date}**。部分商品的累積報酬率比較可能會有基準落差。"
                     )
                 else:
@@ -314,8 +314,8 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                     height = bar.get_height()
                     
                     label_text = f'{height:.1f}%'
-                    if row['實際買入日'] > baseline_date:
-                        label_text += '*'
+                    # if row['實際買入日'] > baseline_date:
+                    #     label_text += '*'
                     
                     ax.text(bar.get_x() + bar.get_width()/2., height, label_text, 
                             ha='center', va='bottom' if height > 0 else 'top', fontweight='bold',
