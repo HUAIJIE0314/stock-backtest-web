@@ -61,6 +61,10 @@ def should_prefer_finmind(ticker):
     return clean_ticker.startswith('020')
 
 
+def yfinance_exclusive_end(end_date):
+    return (pd.to_datetime(end_date) + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+
+
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_yahoo_dividends(ticker, start_date, end_date):
     period1 = int(pd.to_datetime(start_date).tz_localize('Asia/Taipei').timestamp())
@@ -103,6 +107,7 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
     tax_rate = 0.003
     results = []
     daily_returns_dict = {} # 用來收集每天的報酬率資料
+    yf_end_date = yfinance_exclusive_end(end_date)
 
     for ticker in tickers:
         if not ticker: continue
@@ -110,7 +115,7 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
             # 階段 1：嘗試從 yfinance 撈取資料
             data = get_taiwan_etn_finmind(ticker, start_date, end_date) if should_prefer_finmind(ticker) else pd.DataFrame()
             if data.empty:
-                data = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)
+                data = yf.download(ticker, start=start_date, end=yf_end_date, progress=False, auto_adjust=False)
 
             # yfinance 備援：若為空，嘗試台股字尾互換
             if data.empty:
@@ -124,7 +129,7 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
                     alt = ticker + '.TW'
 
                 if alt:
-                    data = yf.download(alt, start=start_date, end=end_date, progress=False, auto_adjust=False)
+                    data = yf.download(alt, start=start_date, end=yf_end_date, progress=False, auto_adjust=False)
                     if not data.empty:
                         ticker = alt
 
@@ -245,7 +250,8 @@ st.sidebar.header("回測參數設定")
 capital = st.sidebar.number_input("單一標的投入本金", value=500000, step=10000)
 entry_date = st.sidebar.date_input("開始日期", value=pd.to_datetime('2026-01-01'))
 # exit_date = st.sidebar.date_input("結束日期", value=pd.to_datetime('2026-04-19'))
-exit_date = st.sidebar.date_input("結束日期", value=datetime.today() - timedelta(days=1))
+default_exit_date = pd.Timestamp.now(tz='Asia/Taipei').date() - timedelta(days=1)
+exit_date = st.sidebar.date_input("結束日期", value=default_exit_date)
 
 # --- 側邊欄：獨立 20 個輸入框 ---
 Max_of_tickers = 25
