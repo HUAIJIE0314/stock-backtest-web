@@ -45,6 +45,8 @@ def get_taiwan_etn_finmind(ticker, start_date, end_date):
             # 將 FinMind 的小寫欄位轉為首字母大寫，接軌 yfinance 格式
             df = df.rename(columns={'date': 'Date', 'close': 'Close'})
             df.set_index(pd.to_datetime(df['Date']), inplace=True)
+            df = df.sort_index()
+            df = df.loc[pd.to_datetime(start_date):pd.to_datetime(end_date)]
             return df
     except Exception as e:
         pass # 靜默處理，若發生錯誤會回傳空表，交由主程式略過
@@ -54,7 +56,12 @@ def get_taiwan_etn_finmind(ticker, start_date, end_date):
 # ==========================================
 # 2. 核心回測邏輯 (新增每日報酬率計算)(雙資料源備援：yfinance + FinMind)
 # ==========================================
-@st.cache_data(show_spinner=False)
+def should_prefer_finmind(ticker):
+    clean_ticker = ticker.upper().replace('.TW', '').replace('.TWO', '')
+    return clean_ticker.startswith('020')
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
 def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stock):
     fee_rate = 0.001425
     tax_rate = 0.003
@@ -65,7 +72,9 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
         if not ticker: continue
         try:
             # 階段 1：嘗試從 yfinance 撈取資料
-            data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+            data = get_taiwan_etn_finmind(ticker, start_date, end_date) if should_prefer_finmind(ticker) else pd.DataFrame()
+            if data.empty:
+                data = yf.download(ticker, start=start_date, end=end_date, progress=False)
 
             # yfinance 備援：若為空，嘗試台股字尾互換
             if data.empty:
@@ -104,6 +113,8 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
 
             # --- 後續計算邏輯保持不變 ---
             
+            data = data.sort_index()
+
             initial_price = float(data[price_col].iloc[0])
             current_price = float(data[price_col].iloc[-1])
             actual_start = data.index[0].strftime('%Y-%m-%d')
