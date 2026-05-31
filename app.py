@@ -62,6 +62,42 @@ def should_prefer_finmind(ticker):
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
+def get_yahoo_dividends(ticker, start_date, end_date):
+    period1 = int(pd.to_datetime(start_date).tz_localize('Asia/Taipei').timestamp())
+    period2 = int((pd.to_datetime(end_date) + pd.Timedelta(days=1)).tz_localize('Asia/Taipei').timestamp())
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+    params = {
+        "period1": period1,
+        "period2": period2,
+        "interval": "1d",
+        "events": "div",
+    }
+    try:
+        r = requests.get(url, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        result = r.json().get("chart", {}).get("result") or []
+        if not result:
+            return pd.Series(dtype=float)
+
+        dividends = result[0].get("events", {}).get("dividends", {})
+        if not dividends:
+            return pd.Series(dtype=float)
+
+        rows = []
+        for event in dividends.values():
+            ex_date = pd.to_datetime(event["date"], unit="s").tz_localize("UTC").tz_convert("Asia/Taipei").normalize().tz_localize(None)
+            rows.append((ex_date, float(event["amount"])))
+
+        dividend_series = pd.Series(
+            data=[amount for _, amount in rows],
+            index=[ex_date for ex_date, _ in rows],
+            dtype=float,
+        ).sort_index()
+        return dividend_series.loc[pd.to_datetime(start_date):pd.to_datetime(end_date)]
+    except Exception:
+        return pd.Series(dtype=float)
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
 def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stock):
     fee_rate = 0.001425
     tax_rate = 0.003
@@ -74,7 +110,7 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
             # 階段 1：嘗試從 yfinance 撈取資料
             data = get_taiwan_etn_finmind(ticker, start_date, end_date) if should_prefer_finmind(ticker) else pd.DataFrame()
             if data.empty:
-                data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+                data = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)
 
             # yfinance 備援：若為空，嘗試台股字尾互換
             if data.empty:
@@ -88,7 +124,7 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
                     alt = ticker + '.TW'
 
                 if alt:
-                    data = yf.download(alt, start=start_date, end=end_date, progress=False)
+                    data = yf.download(alt, start=start_date, end=end_date, progress=False, auto_adjust=False)
                     if not data.empty:
                         ticker = alt
 
@@ -105,7 +141,7 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
                 data.columns = [col[0] if isinstance(col, tuple) else col for col in data.columns]
             data.columns = [str(col).strip() for col in data.columns]
 
-            price_col = 'Adj Close' if 'Adj Close' in data.columns else 'Close'
+            price_col = 'Close'
             
             # 確保有抓到價格欄位
             if price_col not in data.columns:
@@ -127,6 +163,7 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
             
             # 複製一份每日價格來計算曲線
             daily_prices = data[price_col].copy()
+            dividend_series = get_yahoo_dividends(ticker, actual_start, actual_end)
             
             # --- 股票分割校正邏輯 ---
             split_events = {
@@ -152,10 +189,12 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
                     # 為了讓走勢圖平滑，分割日(含)之後的價格乘上比例，還原真實走勢
                     split_datetime = pd.to_datetime(split_date_str)
                     daily_prices[daily_prices.index >= split_datetime] *= split_ratio
+
+            dividend_income = float(dividend_series.sum()) * shares_bought
             
             gross_sell_value = shares_bought * current_price
             net_sell_value = gross_sell_value * (1 - fee_rate - tax_rate)
-            final_value = net_sell_value + leftover_cash
+            final_value = net_sell_value + leftover_cash + dividend_income
             roi = ((final_value - investment_per_stock) / investment_per_stock) * 100
 
             total_days = (data.index[-1] - data.index[0]).days
@@ -171,13 +210,20 @@ def calculate_lump_sum_roi_v2(tickers, start_date, end_date, investment_per_stoc
                 '結算價': round(current_price, 2),
                 '股數': shares_bought,
                 '投入本金': round(buy_cost, 0),
+                '配息收入': round(dividend_income, 0),
                 '結算價值': round(final_value, 0),
                 '報酬率%': round(roi, 2),
                 '年化報酬率%': round(annualized_roi, 2)
             })
             
             # 計算每日累積報酬率 (%) 並存入字典
-            daily_roi = (daily_prices / initial_price - 1) * 100
+            daily_dividends = pd.Series(0.0, index=daily_prices.index)
+            for ex_date, dividend_per_share in dividend_series.items():
+                eligible_dates = daily_dividends.index[daily_dividends.index >= ex_date]
+                if len(eligible_dates) > 0:
+                    daily_dividends.loc[eligible_dates[0]] += dividend_per_share
+            cumulative_dividends = daily_dividends.cumsum()
+            daily_roi = ((daily_prices + cumulative_dividends) / initial_price - 1) * 100
             daily_returns_dict[ticker] = daily_roi
 
         except Exception as e:
@@ -290,6 +336,7 @@ if st.sidebar.button("🚀 開始回測", type="primary"):
                         '結算價': '{:.2f}',
                         '股數': '{:,}',
                         '投入本金': '{:,.0f}',
+                        '配息收入': '{:,.0f}',
                         '結算價值': '{:,.0f}',
                         '報酬率%': '{:.2f}%',
                         '年化報酬率%': '{:.2f}%'
